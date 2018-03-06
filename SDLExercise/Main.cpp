@@ -32,7 +32,6 @@ struct ship {
 	bool shooting;
 	int speed;
 	int shotTimer;
-	int shotCD;
 	int frame;
 	SDL_Rect spriteClips[2];
 
@@ -42,20 +41,22 @@ struct ship {
 		speed = 5;
 		frame = 0;
 		shotTimer = 0;
-		shotCD = 10;
 		shooting = false;
 		for (bool &d : directions) {
 			d = false;
 		}
-		spriteClips[0] = { 0,0,1024,1024 };
-		spriteClips[1] = { 0,1052,1024,2048 };
+		spriteClips[0] = { 0, 0, 1024, 1024 };
+		spriteClips[1] = { 0, 1052, 1024, 2048 };
 	}
 	bool canShoot() {
-		if (shotTimer > 0) return false;
-		else return true;
-	}
-	void cooldown() {
-		if (shotTimer > 0) shotTimer--;
+		if (shotTimer == 0) {
+			shotTimer = 15;
+			return true;
+		}
+		else {
+			shotTimer--;
+			return false;
+		}
 	}
 };
 struct bullet {
@@ -63,12 +64,13 @@ struct bullet {
 	bool active, shot;
 	int speed;
 
-	bullet() {
+	bullet(int sp) {
 		x = 0;
 		y = 0;
 		active = false;
-		speed = 25;
+		speed = sp;
 	}
+	bullet() {}
 };
 
 struct globals 
@@ -83,8 +85,24 @@ struct globals
 	int introState = START;
 
 	ship* player = new ship();
-	bullet bullets[SHOTS];
+	bullet playerBullets[SHOTS];
+	bullet enemyBullets[SHOTS];
 	SDL_Rect bckgdestRect = { 0,0,WIDTH,HEIGHT };
+	int bsdTimer = 0;
+
+	int playerShot = 0;
+	int enemyShot = 10;
+
+	bool bsdShoot() {
+		if (bsdTimer == 0) {
+			bsdTimer = 50;
+			return true;
+		}
+		else {
+			bsdTimer--;
+			return false;
+		}
+	}
 } g;
 
 
@@ -134,7 +152,8 @@ void init() {
 
 
 	for (int i = 0; i < SHOTS; i++) {
-		g.bullets[i] = bullet();
+		g.playerBullets[i] = bullet(25);
+		g.enemyBullets[i] = bullet(10);
 	}
 }
 
@@ -199,26 +218,36 @@ void update() {
 		if (g.player->directions[RIGHT]) g.player->x += g.player->speed;
 
 		if (g.player->shooting) {
-			if (g.player->canShoot()) {
-				for (int i = 0; i < SHOTS; i++) {
-					if (!g.bullets[i].active) {
-						Mix_PlayChannel(3, g.blaster, 0);
-						g.bullets[i].active = true;
-						g.bullets[i].x = g.player->x + 32;
-						g.bullets[i].y = g.player->y + 16;
-						g.player->shotTimer = g.player->shotCD;
-						return;
-					}
-				}
+			if (g.player->canShoot()) {	
+				Mix_PlayChannel(3, g.blaster, 0);
+				if (g.playerShot == SHOTS) g.playerShot = 0;
+				g.playerBullets[g.playerShot].active = true;
+				g.playerBullets[g.playerShot].x = g.player->x + 32;
+				g.playerBullets[g.playerShot].y = g.player->y + 16;
+				g.playerShot++;
 			}
 		}
-		g.player->cooldown();
+
+		if (g.bsdShoot()) {
+			Mix_PlayChannel(4, g.blaster, 0);
+			if (g.enemyShot == SHOTS) g.enemyShot = 0;
+			g.enemyBullets[g.enemyShot].active = true;
+			g.enemyBullets[g.enemyShot].x = WIDTH / 2;
+			g.enemyBullets[g.enemyShot].y = g.player->y;
+			g.enemyShot++;
+		}
 
 		for (int i = 0; i<SHOTS; i++)
 		{
-			if (g.bullets[i].active) {
-				g.bullets[i].x += g.bullets[i].speed;
-				if (g.bullets[i].x > WIDTH) g.bullets[i].active = false;
+			if (g.playerBullets[i].active) {
+				g.playerBullets[i].x += g.playerBullets[i].speed;
+				if (g.playerBullets[i].x > WIDTH) g.playerBullets[i].active = false;
+			}
+			if (g.enemyBullets[i].active) {
+				g.enemyBullets[i].x -= g.enemyBullets[i].speed;
+				if (g.enemyBullets[i].x < 0) {
+					g.enemyBullets[i].active = false;
+				}
 			}
 		}
 	}
@@ -234,8 +263,12 @@ void render() {
 	//bullet render
 	for (int i = 0; i<10; i++)
 	{
-		if (g.bullets[i].active) {
-			destRect = { g.bullets[i].x, g.bullets[i].y, 32, 32 };
+		if (g.playerBullets[i].active) {
+			destRect = { g.playerBullets[i].x, g.playerBullets[i].y, 32, 32 };
+			SDL_RenderCopy(g.renderer, g.textures[BULLET], nullptr, &destRect);
+		}
+		if (g.enemyBullets[i].active) {
+			destRect = { g.enemyBullets[i].x, g.enemyBullets[i].y, 32, 32 };
 			SDL_RenderCopy(g.renderer, g.textures[BULLET], nullptr, &destRect);
 		}
 	}
