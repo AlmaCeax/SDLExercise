@@ -1,10 +1,12 @@
-#include "../SDL/include/SDL.h"
-#include "../SDL_Image/include/SDL_image.h"
-#include "../SDL_Mixer/include/SDL_mixer.h"
-#pragma comment(lib,"../SDL/libx86/SDL2.lib")
-#pragma comment(lib,"../SDL/libx86/SDL2main.lib")
-#pragma comment(lib,"../SDL_Image/libx86/SDL2_image.lib")
-#pragma comment(lib,"../SDL_Mixer/libx86/SDL2_mixer.lib")
+#include "SDL\include\SDL.h"
+#include "SDL_Image\include\SDL_image.h"
+#include "SDL_Mixer\include\SDL_mixer.h"
+
+#pragma comment( lib, "SDL/libx86/SDL2.lib" )
+#pragma comment( lib, "SDL/libx86/SDL2main.lib" )
+#pragma comment( lib, "SDL_image/libx86/SDL2_image.lib" )
+#pragma comment( lib, "SDL_mixer/libx86/SDL2_mixer.lib" )
+
 
 #define WIDTH 1280
 #define HEIGHT 720
@@ -160,19 +162,19 @@ void init() {
 	g.renderer = SDL_CreateRenderer(g.window, -1, 0);
 
 	IMG_Init(IMG_INIT_PNG);
-	g.textures[BACKGROUND] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("../Game/Assets/Images/background.png"));
-	g.textures[SHEET] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("../Game/Assets/Images/WinTack.png"));
-	g.textures[BULLET] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("../Game/Assets/Images/bullet.png"));
-	g.textures[BSD] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("../Game/Assets/Images/bsd.png"));
+	g.textures[BACKGROUND] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("Assets/Images/background.png"));
+	g.textures[SHEET] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("Assets/Images/WinTack.png"));
+	g.textures[BULLET] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("Assets/Images/bullet.png"));
+	g.textures[BSD] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("Assets/Images/bsd.png"));
 
 	Mix_Init(MIX_INIT_OGG);
 	Mix_OpenAudio(MIX_DEFAULT_FREQUENCY, AUDIO_U8, 2, 1024);
-	g.music = Mix_LoadMUS("../Game/Assets/Sounds/song.ogg");
+	g.music = Mix_LoadMUS("Assets/Sounds/song.ogg");
 	Mix_VolumeMusic(50);
 	//Mix_PlayMusic(g.music, -1);
-	g.blaster = Mix_LoadWAV("../Game/Assets/Sounds/blaster.wav");
-	g.windows = Mix_LoadWAV("../Game/Assets/Sounds/windows.wav");
-	g.error = Mix_LoadWAV("../Game/Assets/Sounds/error.wav");
+	g.blaster = Mix_LoadWAV("Assets/Sounds/blaster.wav");
+	g.windows = Mix_LoadWAV("Assets/Sounds/windows.wav");
+	g.error = Mix_LoadWAV("Assets/Sounds/error.wav");
 
 	Mix_PlayChannel(1, g.windows, 0);
 	Mix_ChannelFinished(errorTime);
