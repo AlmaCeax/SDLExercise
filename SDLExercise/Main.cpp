@@ -19,7 +19,7 @@
 #define RDY 2
 
 #define BACKGROUND 0
-#define SHIP 1
+#define SHEET 1
 #define BULLET 2
 #define BSD 3
 
@@ -34,6 +34,8 @@ struct ship {
 	int shotTimer;
 	int frame;
 	SDL_Rect spriteClips[2];
+	SDL_Rect collider;
+	int lifes = 3;
 
 	ship() {
 		x = 32;
@@ -47,28 +49,29 @@ struct ship {
 		}
 		spriteClips[0] = { 0, 0, 1024, 1024 };
 		spriteClips[1] = { 0, 1052, 1024, 2048 };
+		collider = { x,y,64,64 };
 	}
 	bool canShoot() {
-		if (shotTimer == 0) {
+		if (shotTimer == 0 && shooting) {
 			shotTimer = 15;
 			return true;
 		}
-		else {
-			shotTimer--;
-			return false;
-		}
+		if(shotTimer>0) shotTimer--;
+		return false;
 	}
 };
 struct bullet {
 	int x, y;
 	bool active, shot;
 	int speed;
+	SDL_Rect collider;
 
 	bullet(int sp) {
 		x = 0;
 		y = 0;
 		active = false;
 		speed = sp;
+		collider = { x,y,32,32 };
 	}
 	bullet() {}
 };
@@ -87,7 +90,8 @@ struct globals
 	ship* player = new ship();
 	bullet playerBullets[SHOTS];
 	bullet enemyBullets[SHOTS];
-	SDL_Rect bckgdestRect = { 0,0,WIDTH,HEIGHT };
+	SDL_Rect srcRectEB = { 1350, 1052, 1024, 1024 };
+	SDL_Rect bsdCollider = { WIDTH / 2, HEIGHT / 4, WIDTH / 2, HEIGHT / 2 };
 	int bsdTimer = 0;
 
 	int playerShot = 0;
@@ -95,18 +99,28 @@ struct globals
 
 	bool bsdShoot() {
 		if (bsdTimer == 0) {
-			bsdTimer = 50;
-			return true;
-		}
-		else {
-			bsdTimer--;
+			if (player->y > HEIGHT / 4 && player->y < HEIGHT / 4 + HEIGHT / 2 - 32)
+			{
+				bsdTimer = 50;
+				return true;
+			}
 			return false;
 		}
+		bsdTimer--;
+		return false;
 	}
 } g;
 
 
-
+bool collision(SDL_Rect rect1, SDL_Rect rect2) {
+	if ((rect1.x < rect2.x + rect2.w) &&
+		(rect2.x < rect1.x + rect1.w) &&
+		(rect1.y < rect2.y + rect2.h) &&
+		(rect2.y < rect1.y + rect1.h)) {
+		return true;
+	}
+	return false;
+}
 
 void close() {
 	Mix_FreeMusic(g.music);
@@ -134,7 +148,7 @@ void init() {
 
 	IMG_Init(IMG_INIT_PNG);
 	g.textures[BACKGROUND] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("../Game/Assets/Images/background.png"));
-	g.textures[SHIP] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("../Game/Assets/Images/WinTack.png"));
+	g.textures[SHEET] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("../Game/Assets/Images/WinTack.png"));
 	g.textures[BULLET] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("../Game/Assets/Images/bullet.png"));
 	g.textures[BSD] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("../Game/Assets/Images/bsd.png"));
 
@@ -217,15 +231,18 @@ void update() {
 		if (g.player->directions[LEFT]) g.player->x -= g.player->speed;
 		if (g.player->directions[RIGHT]) g.player->x += g.player->speed;
 
-		if (g.player->shooting) {
-			if (g.player->canShoot()) {	
-				Mix_PlayChannel(3, g.blaster, 0);
-				if (g.playerShot == SHOTS) g.playerShot = 0;
-				g.playerBullets[g.playerShot].active = true;
-				g.playerBullets[g.playerShot].x = g.player->x + 32;
-				g.playerBullets[g.playerShot].y = g.player->y + 16;
-				g.playerShot++;
-			}
+		g.player->collider.x = g.player->x;
+		g.player->collider.y = g.player->y;
+
+		if (g.player->canShoot()) {
+			Mix_PlayChannel(3, g.blaster, 0);
+			if (g.playerShot == SHOTS) g.playerShot = 0;
+			g.playerBullets[g.playerShot].active = true;
+			g.playerBullets[g.playerShot].x = g.player->x + 32;
+			g.playerBullets[g.playerShot].y = g.player->y + 16;
+			g.playerBullets[g.playerShot].collider.x = g.player->x + 32;
+			g.playerBullets[g.playerShot].collider.y = g.player->y + 16;
+			g.playerShot++;
 		}
 
 		if (g.bsdShoot()) {
@@ -234,6 +251,8 @@ void update() {
 			g.enemyBullets[g.enemyShot].active = true;
 			g.enemyBullets[g.enemyShot].x = WIDTH / 2;
 			g.enemyBullets[g.enemyShot].y = g.player->y;
+			g.enemyBullets[g.enemyShot].collider.x = WIDTH / 2;
+			g.enemyBullets[g.enemyShot].collider.y = g.player->y;
 			g.enemyShot++;
 		}
 
@@ -241,11 +260,20 @@ void update() {
 		{
 			if (g.playerBullets[i].active) {
 				g.playerBullets[i].x += g.playerBullets[i].speed;
+				g.playerBullets[i].collider.x = g.playerBullets[i].x;
 				if (g.playerBullets[i].x > WIDTH) g.playerBullets[i].active = false;
+
+				if (collision(g.playerBullets[i].collider, g.bsdCollider)) {
+					g.playerBullets[i].active = false;
+				}
 			}
 			if (g.enemyBullets[i].active) {
 				g.enemyBullets[i].x -= g.enemyBullets[i].speed;
+				g.enemyBullets[i].collider.x = g.enemyBullets[i].x;
 				if (g.enemyBullets[i].x < 0) {
+					g.enemyBullets[i].active = false;
+				}
+				if (collision(g.enemyBullets[i].collider, g.player->collider)) {
 					g.enemyBullets[i].active = false;
 				}
 			}
@@ -269,7 +297,7 @@ void render() {
 		}
 		if (g.enemyBullets[i].active) {
 			destRect = { g.enemyBullets[i].x, g.enemyBullets[i].y, 32, 32 };
-			SDL_RenderCopy(g.renderer, g.textures[BULLET], nullptr, &destRect);
+			SDL_RenderCopy(g.renderer, g.textures[SHEET], &g.srcRectEB, &destRect);
 		}
 	}
 
@@ -281,7 +309,7 @@ void render() {
 
 	//Ship animation
 	destRect = { g.player->x, g.player->y, 64, 64 };
-	SDL_RenderCopy(g.renderer, g.textures[SHIP], &g.player->spriteClips[g.player->frame/6], &destRect);
+	SDL_RenderCopy(g.renderer, g.textures[SHEET], &g.player->spriteClips[g.player->frame/6], &destRect);
 	g.player->frame++;
 	if (g.player->frame / 6 >= 2)
 	{
