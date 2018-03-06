@@ -219,7 +219,6 @@ UpgradeLog*.htm
 # SQL Server files
 *.mdf
 *.ldf
-*.ndf
 
 # Business Intelligence projects
 *.rdl.data
@@ -280,9 +279,3 @@ __pycache__/
 
 # Telerik's JustMock configuration file
 *.jmconfig
-
-# BizTalk build output
-*.btp.cs
-*.btm.cs
-*.odx.cs
-*.xsd.cs
