@@ -6,17 +6,22 @@
 #pragma comment(lib,"../SDL_Image/libx86/SDL2_image.lib")
 #pragma comment(lib,"../SDL_Mixer/libx86/SDL2_mixer.lib")
 
-#define WIDTH 640
-#define HEIGHT 480
+#define WIDTH 1280
+#define HEIGHT 720
 
 #define UP 0
 #define DOWN 1
 #define LEFT 2
 #define RIGHT 3
 
+#define START 0
+#define ERROR 1
+#define RDY 2
+
 #define BACKGROUND 0
 #define SHIP 1
 #define BULLET 2
+#define BSD 3
 
 #define SHOTS 10
 
@@ -28,17 +33,22 @@ struct ship {
 	int speed;
 	int shotTimer;
 	int shotCD;
+	int frame;
+	SDL_Rect spriteClips[2];
 
 	ship() {
-		x = WIDTH / 6;
-		y = HEIGHT / 6;
+		x = 32;
+		y = HEIGHT / 2 -32;
 		speed = 5;
+		frame = 0;
 		shotTimer = 0;
 		shotCD = 10;
 		shooting = false;
 		for (bool &d : directions) {
 			d = false;
 		}
+		spriteClips[0] = { 0,0,1024,1024 };
+		spriteClips[1] = { 0,1052,1024,2048 };
 	}
 	bool canShoot() {
 		if (shotTimer > 0) return false;
@@ -66,9 +76,11 @@ struct globals
 	SDL_Renderer* renderer = nullptr;
 	Mix_Music* music = nullptr;
 	Mix_Chunk* blaster = nullptr;
+	Mix_Chunk* windows = nullptr;
+	Mix_Chunk* error = nullptr;
 	SDL_Window* window = nullptr;
-	SDL_Texture* textures[3];
-
+	SDL_Texture* textures[4];
+	int introState = START;
 
 	ship* player = new ship();
 	bullet bullets[SHOTS];
@@ -88,22 +100,38 @@ void close() {
 	SDL_Quit();
 }
 
+void errorTime(int c) {
+	if (c == 1) {
+		Mix_PlayChannel(2, g.error, 0);
+		g.introState = ERROR;
+	}
+	else {
+		g.introState = RDY;
+	}
+}
 void init() {
 	SDL_Init(SDL_INIT_EVERYTHING);
 	g.window = SDL_CreateWindow("SDLTest", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH, HEIGHT, SDL_WINDOW_OPENGL);
 	g.renderer = SDL_CreateRenderer(g.window, -1, 0);
 
 	IMG_Init(IMG_INIT_PNG);
-	g.textures[BACKGROUND] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("../Game/Images/background.png"));
-	g.textures[SHIP] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("../Game/Images/ship.png"));
-	g.textures[BULLET] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("../Game/Images/bullet.png"));
+	g.textures[BACKGROUND] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("../Game/Assets/Images/background.png"));
+	g.textures[SHIP] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("../Game/Assets/Images/WinTack.png"));
+	g.textures[BULLET] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("../Game/Assets/Images/bullet.png"));
+	g.textures[BSD] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("../Game/Assets/Images/bsd.png"));
 
 	Mix_Init(MIX_INIT_OGG);
 	Mix_OpenAudio(MIX_DEFAULT_FREQUENCY, AUDIO_U8, 2, 1024);
-	g.music = Mix_LoadMUS("../Game/Sounds/song.ogg");
+	g.music = Mix_LoadMUS("../Game/Assets/Sounds/song.ogg");
 	Mix_VolumeMusic(50);
-	Mix_PlayMusic(g.music, -1);
-	g.blaster = Mix_LoadWAV("../Game/Sounds/blaster.wav");
+	//Mix_PlayMusic(g.music, -1);
+	g.blaster = Mix_LoadWAV("../Game/Assets/Sounds/blaster.wav");
+	g.windows = Mix_LoadWAV("../Game/Assets/Sounds/windows.wav");
+	g.error = Mix_LoadWAV("../Game/Assets/Sounds/error.wav");
+
+	Mix_PlayChannel(1, g.windows, 0);
+	Mix_ChannelFinished(errorTime);
+
 
 	for (int i = 0; i < SHOTS; i++) {
 		g.bullets[i] = bullet();
@@ -163,42 +191,47 @@ void handleEvents(bool &running)
 }
 
 void update() {
-	if (g.player->directions[UP]) g.player->y -= g.player->speed;
-	if (g.player->directions[DOWN]) g.player->y += g.player->speed;
-	if (g.player->directions[LEFT]) g.player->x -= g.player->speed;
-	if (g.player->directions[RIGHT]) g.player->x += g.player->speed;
 
-	if (g.player->shooting) {
-		if (g.player->canShoot()) {
-			for (int i = 0; i < SHOTS; i++) {
-				if (!g.bullets[i].active) {
-					Mix_PlayChannel(-1, g.blaster, 0);
-					g.bullets[i].active = true;
-					g.bullets[i].x = g.player->x + 32;
-					g.bullets[i].y = g. player->y + 16;
-					g.player->shotTimer = g.player->shotCD;
-					return;
+	if (g.introState == RDY) {
+		if (g.player->directions[UP]) g.player->y -= g.player->speed;
+		if (g.player->directions[DOWN]) g.player->y += g.player->speed;
+		if (g.player->directions[LEFT]) g.player->x -= g.player->speed;
+		if (g.player->directions[RIGHT]) g.player->x += g.player->speed;
+
+		if (g.player->shooting) {
+			if (g.player->canShoot()) {
+				for (int i = 0; i < SHOTS; i++) {
+					if (!g.bullets[i].active) {
+						Mix_PlayChannel(3, g.blaster, 0);
+						g.bullets[i].active = true;
+						g.bullets[i].x = g.player->x + 32;
+						g.bullets[i].y = g.player->y + 16;
+						g.player->shotTimer = g.player->shotCD;
+						return;
+					}
 				}
 			}
 		}
-	}
-	g.player->cooldown();
+		g.player->cooldown();
 
-	for (int i = 0; i<SHOTS; i++)
-	{
-		if (g.bullets[i].active) {
-			g.bullets[i].x += g.bullets[i].speed;
-			if (g.bullets[i].x > WIDTH) g.bullets[i].active = false;
+		for (int i = 0; i<SHOTS; i++)
+		{
+			if (g.bullets[i].active) {
+				g.bullets[i].x += g.bullets[i].speed;
+				if (g.bullets[i].x > WIDTH) g.bullets[i].active = false;
+			}
 		}
 	}
 }
 
 void render() {
 	SDL_Rect destRect;
-	destRect = {0, 0, WIDTH, HEIGHT};
 
+	//background render
+	destRect = {0, 0, WIDTH, HEIGHT};
 	SDL_RenderCopy(g.renderer, g.textures[BACKGROUND], nullptr, &destRect);
 
+	//bullet render
 	for (int i = 0; i<10; i++)
 	{
 		if (g.bullets[i].active) {
@@ -206,8 +239,21 @@ void render() {
 			SDL_RenderCopy(g.renderer, g.textures[BULLET], nullptr, &destRect);
 		}
 	}
+
+	if (g.introState != START)
+	{
+		destRect = { WIDTH / 2, HEIGHT / 4, WIDTH / 2, HEIGHT / 2 };
+		SDL_RenderCopy(g.renderer, g.textures[BSD], nullptr, &destRect);
+	}
+
+	//Ship animation
 	destRect = { g.player->x, g.player->y, 64, 64 };
-	SDL_RenderCopy(g.renderer, g.textures[SHIP], nullptr, &destRect);
+	SDL_RenderCopy(g.renderer, g.textures[SHIP], &g.player->spriteClips[g.player->frame/6], &destRect);
+	g.player->frame++;
+	if (g.player->frame / 6 >= 2)
+	{
+		g.player->frame = 0;
+	}
 
 	SDL_RenderPresent(g.renderer);
 }
