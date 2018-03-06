@@ -16,7 +16,8 @@
 
 #define START 0
 #define ERROR 1
-#define RDY 2
+#define PLAY 2
+#define END 2
 
 #define BACKGROUND 0
 #define SHEET 1
@@ -35,7 +36,7 @@ struct ship {
 	int frame;
 	SDL_Rect spriteClips[2];
 	SDL_Rect collider;
-	int lifes = 3;
+	int lives = 3;
 
 	ship() {
 		x = 32;
@@ -85,7 +86,7 @@ struct globals
 	Mix_Chunk* error = nullptr;
 	SDL_Window* window = nullptr;
 	SDL_Texture* textures[4];
-	int introState = START;
+	int gameState = START;
 
 	ship* player = new ship();
 	bullet playerBullets[SHOTS];
@@ -135,12 +136,24 @@ void close() {
 void errorTime(int c) {
 	if (c == 1) {
 		Mix_PlayChannel(2, g.error, 0);
-		g.introState = ERROR;
+		g.gameState = ERROR;
 	}
-	else {
-		g.introState = RDY;
+	else if (c==2) {
+		g.gameState = PLAY;
 	}
 }
+void restart() {
+	g.gameState = START;
+	g.player->x = 32;
+	g.player->y = HEIGHT / 2 - 32;
+	g.player->lives = 3;
+	for (int i = 0; i < SHOTS; i++) {
+		g.playerBullets[i].active = false;
+		g.enemyBullets[i].active = false;
+	}
+	Mix_PlayChannel(1, g.windows, 0);
+}
+
 void init() {
 	SDL_Init(SDL_INIT_EVERYTHING);
 	g.window = SDL_CreateWindow("SDLTest", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH, HEIGHT, SDL_WINDOW_OPENGL);
@@ -225,7 +238,7 @@ void handleEvents(bool &running)
 
 void update() {
 
-	if (g.introState == RDY) {
+	if (g.gameState == PLAY) {
 		if (g.player->directions[UP]) g.player->y -= g.player->speed;
 		if (g.player->directions[DOWN]) g.player->y += g.player->speed;
 		if (g.player->directions[LEFT]) g.player->x -= g.player->speed;
@@ -275,6 +288,8 @@ void update() {
 				}
 				if (collision(g.enemyBullets[i].collider, g.player->collider)) {
 					g.enemyBullets[i].active = false;
+					g.player->lives--;
+					if (g.player->lives == 0) restart();
 				}
 			}
 		}
@@ -301,7 +316,7 @@ void render() {
 		}
 	}
 
-	if (g.introState != START)
+	if (g.gameState != START)
 	{
 		destRect = { WIDTH / 2, HEIGHT / 4, WIDTH / 2, HEIGHT / 2 };
 		SDL_RenderCopy(g.renderer, g.textures[BSD], nullptr, &destRect);
