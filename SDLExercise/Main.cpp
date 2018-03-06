@@ -1,27 +1,25 @@
 #include "../SDL/include/SDL.h"
+#include "../SDL_Image/include/SDL_image.h"
+#include "../SDL_Mixer/include/SDL_mixer.h"
 #pragma comment(lib,"../SDL/libx86/SDL2.lib")
 #pragma comment(lib,"../SDL/libx86/SDL2main.lib")
-
-#include "../SDL_Image/include/SDL_image.h"
 #pragma comment(lib,"../SDL_Image/libx86/SDL2_image.lib")
-
-#include "../SDL_Mixer/include/SDL_mixer.h"
 #pragma comment(lib,"../SDL_Mixer/libx86/SDL2_mixer.lib")
-
 
 #define WIDTH 640
 #define HEIGHT 480
+
 #define UP 0
 #define DOWN 1
 #define LEFT 2
 #define RIGHT 3
+
 #define BACKGROUND 0
 #define SHIP 1
 #define BULLET 2
 
-SDL_Renderer* renderer = nullptr;
-Mix_Music* music = nullptr;
-Mix_Chunk* blaster = nullptr;
+#define SHOTS 10
+
 
 struct ship {
 	int x, y;
@@ -30,8 +28,6 @@ struct ship {
 	int speed;
 	int shotTimer;
 	int shotCD;
-	SDL_Rect* destRect;
-	SDL_Rect* srcRect;
 
 	ship() {
 		x = WIDTH / 6;
@@ -43,19 +39,7 @@ struct ship {
 		for (bool &d : directions) {
 			d = false;
 		}
-		destRect = new SDL_Rect();
-		destRect->x = x;
-		destRect->y = y;
-		destRect->w = WIDTH / 4;
-		destRect->h = HEIGHT / 4;
-
-		srcRect = new SDL_Rect();
-		srcRect->x = 0;
-		srcRect->y = 0;
-		srcRect->w = 960;
-		srcRect->h = 506;
 	}
-
 	bool canShoot() {
 		if (shotTimer > 0) return false;
 		else return true;
@@ -68,62 +52,65 @@ struct bullet {
 	int x, y;
 	bool active, shot;
 	int speed;
-	SDL_Rect destRect;
-	SDL_Rect srcRect;
 
 	bullet() {
 		x = 0;
 		y = 0;
 		active = false;
 		speed = 25;
-		destRect = { x , y, 42, 32 };
-		srcRect = { 0, 0,220,1254 };
 	}
 };
 
-void close(SDL_Window* window) {
-	SDL_DestroyWindow(window);
-	SDL_DestroyRenderer(renderer);
-	IMG_Quit();
-	Mix_FreeMusic(music);
+struct globals 
+{
+	SDL_Renderer* renderer = nullptr;
+	Mix_Music* music = nullptr;
+	Mix_Chunk* blaster = nullptr;
+	SDL_Window* window = nullptr;
+	SDL_Texture* textures[3];
+
+
+	ship* player = new ship();
+	bullet bullets[SHOTS];
+	SDL_Rect bckgdestRect = { 0,0,WIDTH,HEIGHT };
+} g;
+
+
+
+
+void close() {
+	Mix_FreeMusic(g.music);
 	Mix_CloseAudio();
 	Mix_Quit();
+	IMG_Quit();
+	SDL_DestroyRenderer(g.renderer);
+	SDL_DestroyWindow(g.window);
 	SDL_Quit();
 }
 
-void init(SDL_Window* window, bullet bullets[10], SDL_Texture* textures[3]) {
+void init() {
 	SDL_Init(SDL_INIT_EVERYTHING);
-	IMG_Init(IMG_INIT_JPG | IMG_INIT_PNG);
+	g.window = SDL_CreateWindow("SDLTest", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH, HEIGHT, SDL_WINDOW_OPENGL);
+	g.renderer = SDL_CreateRenderer(g.window, -1, 0);
+
+	IMG_Init(IMG_INIT_PNG);
+	g.textures[BACKGROUND] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("../Game/Images/background.png"));
+	g.textures[SHIP] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("../Game/Images/ship.png"));
+	g.textures[BULLET] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("../Game/Images/bullet.png"));
+
 	Mix_Init(MIX_INIT_OGG);
-	Mix_AllocateChannels(16);
 	Mix_OpenAudio(MIX_DEFAULT_FREQUENCY, AUDIO_U8, 2, 1024);
-	window = SDL_CreateWindow("SDLTest", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH, HEIGHT, SDL_WINDOW_OPENGL);
-	renderer = SDL_CreateRenderer(window, -1, 0);
-
-	SDL_Surface* surf;
-	surf = IMG_Load("../Game/Images/background.png");
-	if (!surf) close(window);
-	textures[BACKGROUND] = SDL_CreateTextureFromSurface(renderer, surf);
-	surf = IMG_Load("../Game/Images/ship.png");
-	if (!surf) close(window);
-	textures[SHIP] = SDL_CreateTextureFromSurface(renderer, surf);
-	surf = IMG_Load("../Game/Images/bullet.png");
-	if (!surf) close(window);
-	textures[BULLET] = SDL_CreateTextureFromSurface(renderer, surf);
-	SDL_FreeSurface(surf);
-
-	music = Mix_LoadMUS("../Game/Sounds/song.ogg");
+	g.music = Mix_LoadMUS("../Game/Sounds/song.ogg");
 	Mix_VolumeMusic(50);
-	Mix_PlayMusic(music, -1);
+	Mix_PlayMusic(g.music, -1);
+	g.blaster = Mix_LoadWAV("../Game/Sounds/blaster.wav");
 
-	blaster = Mix_LoadWAV("../Game/Sounds/blaster.wav");
-
-	for (int i = 0; i < 10; i++) {
-		bullets[i] = bullet();
+	for (int i = 0; i < SHOTS; i++) {
+		g.bullets[i] = bullet();
 	}
 }
 
-void handleEvents(bool &running, ship* player)
+void handleEvents(bool &running)
 {
 	SDL_Event event;
 	while (SDL_PollEvent(&event) != 0) {
@@ -137,117 +124,103 @@ void handleEvents(bool &running, ship* player)
 				running = false;
 				break;
 			case SDLK_UP:
-				player->directions[UP] = true;
+				g.player->directions[UP] = true;
 				break;
 			case SDLK_DOWN:
-				player->directions[DOWN] = true;
+				g.player->directions[DOWN] = true;
 				break;
 			case SDLK_LEFT:
-				player->directions[LEFT] = true;
+				g.player->directions[LEFT] = true;
 				break;
 			case SDLK_RIGHT:
-				player->directions[RIGHT] = true;
+				g.player->directions[RIGHT] = true;
 				break;
 			case SDLK_SPACE:
-				player->shooting = true;
+				g.player->shooting = true;
 				break;
 			}
 		}
 		else if (event.type == SDL_KEYUP) {
 			switch (event.key.keysym.sym) {
 			case SDLK_UP:
-				player->directions[UP] = false;
+				g.player->directions[UP] = false;
 				break;
 			case SDLK_DOWN:
-				player->directions[DOWN] = false;
+				g.player->directions[DOWN] = false;
 				break;
 			case SDLK_LEFT:
-				player->directions[LEFT] = false;
+				g.player->directions[LEFT] = false;
 				break;
 			case SDLK_RIGHT:
-				player->directions[RIGHT] = false;
+				g.player->directions[RIGHT] = false;
 				break;
 			case SDLK_SPACE:
-				player->shooting = false;
+				g.player->shooting = false;
 				break;
 			}
 		}
 	}
 }
 
-void update(ship* player, bullet bullets[10]) {
-	if (player->directions[UP]) player->y -= player->speed;
-	if (player->directions[DOWN]) player->y += player->speed;
-	if (player->directions[LEFT]) player->x -= player->speed;
-	if (player->directions[RIGHT]) player->x += player->speed;
+void update() {
+	if (g.player->directions[UP]) g.player->y -= g.player->speed;
+	if (g.player->directions[DOWN]) g.player->y += g.player->speed;
+	if (g.player->directions[LEFT]) g.player->x -= g.player->speed;
+	if (g.player->directions[RIGHT]) g.player->x += g.player->speed;
 
-	if (player->shooting) {
-		if (player->canShoot()) {
-			for (int i = 0; i < 10; i++) {
-				if (!bullets[i].active) {
-					Mix_PlayChannel(-1, blaster, 0);
-					bullets[i].active = true;
-					bullets[i].x = player->x + player->destRect->w;
-					bullets[i].y = player->y + (player->destRect->h / 2 - bullets[i].destRect.h);
-					bullets[i].destRect.x = bullets[i].x;
-					bullets[i].destRect.y = bullets[i].y;
-					player->shotTimer = player->shotCD;
+	if (g.player->shooting) {
+		if (g.player->canShoot()) {
+			for (int i = 0; i < SHOTS; i++) {
+				if (!g.bullets[i].active) {
+					Mix_PlayChannel(-1, g.blaster, 0);
+					g.bullets[i].active = true;
+					g.bullets[i].x = g.player->x + 32;
+					g.bullets[i].y = g. player->y + 16;
+					g.player->shotTimer = g.player->shotCD;
 					return;
 				}
 			}
 		}
 	}
-	player->cooldown();
+	g.player->cooldown();
 
-	player->destRect->x = player->x;
-	player->destRect->y = player->y;
-
-	for (int i = 0; i<10; i++)
+	for (int i = 0; i<SHOTS; i++)
 	{
-		if (bullets[i].active) {
-			bullets[i].x += bullets[i].speed;
-			bullets[i].destRect.x = bullets[i].x;
-			if (bullets[i].x > WIDTH) bullets[i].active = false;
+		if (g.bullets[i].active) {
+			g.bullets[i].x += g.bullets[i].speed;
+			if (g.bullets[i].x > WIDTH) g.bullets[i].active = false;
 		}
 	}
 }
 
-void render(ship* player, bullet bullets[10], SDL_Texture* textures[3], SDL_Rect *bckgsrcRect, SDL_Rect *bckgdestRect) {
+void render() {
+	SDL_Rect destRect;
+	destRect = {0, 0, WIDTH, HEIGHT};
 
-	SDL_RenderCopy(renderer, textures[BACKGROUND], bckgsrcRect, bckgdestRect);
+	SDL_RenderCopy(g.renderer, g.textures[BACKGROUND], nullptr, &destRect);
 
 	for (int i = 0; i<10; i++)
 	{
-		if (bullets[i].active) {
-			SDL_RenderCopy(renderer, textures[BULLET], &bullets[i].srcRect, &bullets[i].destRect);
+		if (g.bullets[i].active) {
+			destRect = { g.bullets[i].x, g.bullets[i].y, 32, 32 };
+			SDL_RenderCopy(g.renderer, g.textures[BULLET], nullptr, &destRect);
 		}
 	}
+	destRect = { g.player->x, g.player->y, 64, 64 };
+	SDL_RenderCopy(g.renderer, g.textures[SHIP], nullptr, &destRect);
 
-	SDL_RenderCopy(renderer, textures[SHIP], player->srcRect, player->destRect);
-
-	SDL_RenderPresent(renderer);
+	SDL_RenderPresent(g.renderer);
 }
 
 
 
 int main(int argc, char* argv[])
 {
-	SDL_Window* window = nullptr;
-	SDL_Texture* textures[3];
-
-	SDL_Rect bckgsrcRect = { 0,0,1200,717 };
-	SDL_Rect bckgdestRect = { 0,0,WIDTH,HEIGHT };
-
-
-
-	ship* player = new ship();
-	bullet bullets[10];
-
 	bool running = false;
 	const int FPS = 60;
 	const int frameDelay = 1000 / FPS;
 
-	init(window, bullets, textures);
+	init();
 	running = true;
 
 	Uint32 frameStart;
@@ -257,9 +230,9 @@ int main(int argc, char* argv[])
 
 		frameStart = SDL_GetTicks();
 
-		handleEvents(running, player);
-		update(player, bullets);
-		render(player, bullets, textures, &bckgsrcRect, &bckgdestRect);
+		handleEvents(running);
+		update();
+		render();
 
 		frameTime = SDL_GetTicks() - frameStart;
 
@@ -268,7 +241,7 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	close(window);
+	close();
 
 	return 0;
 }
