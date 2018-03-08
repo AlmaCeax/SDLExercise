@@ -96,13 +96,14 @@ struct bsd {
 	}
 };
 
-struct globals 
+struct globals
 {
 	SDL_Renderer* renderer = nullptr;
 	Mix_Music* music = nullptr;
 	Mix_Chunk* blaster = nullptr;
 	Mix_Chunk* windows = nullptr;
 	Mix_Chunk* error = nullptr;
+	Mix_Chunk* kark = nullptr;
 	SDL_Window* window = nullptr;
 	SDL_Texture* textures[6];
 	int gameState = READY;
@@ -146,6 +147,7 @@ void close() {
 void errorTime(int c) {
 	if (c == 1) {
 		g.gameState = PLAYING;
+		Mix_PlayMusic(g.music, -1);
 	}
 	else if (c==2) {
 		g.gameState = PLAYING;
@@ -181,6 +183,7 @@ void restart() {
 	g.bsd.active = false;
 	g.bsd.spawning = false;
 	g.bsd.lives = 30;
+	Mix_RewindMusic();
 	Mix_PlayChannel(1, g.windows, 0);
 }
 
@@ -200,12 +203,13 @@ void init() {
 
 	Mix_Init(MIX_INIT_OGG);
 	Mix_OpenAudio(MIX_DEFAULT_FREQUENCY, AUDIO_U8, 2, 1024);
-	g.music = Mix_LoadMUS("Assets/Sounds/song.ogg");
-	Mix_VolumeMusic(50);
-	//Mix_PlayMusic(g.music, -1);
+	g.music = Mix_LoadMUS("Assets/Sounds/music.ogg");
+	Mix_VolumeMusic(35);
 	g.blaster = Mix_LoadWAV("Assets/Sounds/blaster.wav");
 	g.windows = Mix_LoadWAV("Assets/Sounds/windows.wav");
 	g.error = Mix_LoadWAV("Assets/Sounds/error.wav");
+	g.kark = Mix_LoadWAV("Assets/Sounds/kark.wav");
+	Mix_VolumeChunk(g.blaster, 40);
 
 	Mix_PlayChannel(1, g.windows, 0);
 	Mix_ChannelFinished(errorTime);
@@ -227,7 +231,7 @@ void init() {
 		int text = rand() % 4 +1;
 		switch (text) {
 			case 1: g.obstacles[i].srcRect = { 0,0,57,80 }; break;
-			case 2: g.obstacles[i].srcRect = { 70,0,57,80 }; break;
+			case 2: g.obstacles[i].srcRect = { 70,0,65,80 }; break;
 			case 3: g.obstacles[i].srcRect = { 135,0,57,80 }; break;
 			case 4: g.obstacles[i].srcRect = { 190,0,75,80 }; break;
 		}
@@ -319,7 +323,7 @@ void update() {
 
 		if (g.bsd.active) {
 			if (g.bsd.shoot()) {
-				Mix_PlayChannel(4, g.blaster, 0);
+				Mix_PlayChannel(4, g.kark, 0);
 				if (g.enemyShot == SHOTS) g.enemyShot = 0;
 				g.enemyBullets[g.enemyShot].active = true;
 				g.enemyBullets[g.enemyShot].x = WIDTH / 2;
@@ -342,7 +346,10 @@ void update() {
 						if (collision(g.obstacles[i].collider, g.player->collider)) {
 							g.obstacles[i].active = false;
 							g.player->lives--;
-							if (g.player->lives == 0)  g.gameState = GO;
+							if (g.player->lives == 0) { 
+								Mix_FadeOutMusic(1000);
+								g.gameState = GO; 
+							}
 						}
 					}
 				}
@@ -350,6 +357,7 @@ void update() {
 		}
 		else {
 			if (collision(g.bsd.collider, g.player->collider)) {
+				Mix_FadeOutMusic(1000);
 				g.gameState = GO;
 			}
 		}
@@ -364,7 +372,10 @@ void update() {
 					if(collision(g.playerBullets[i].collider, g.bsd.collider)) {
 						g.playerBullets[i].active = false;
 						g.bsd.lives--;
-						if (g.bsd.lives == 0) g.gameState = VICTORY;
+						if (g.bsd.lives == 0) {
+							Mix_FadeOutMusic(1000);
+							g.gameState = VICTORY;
+						}
 					}
 				}
 				else
@@ -389,7 +400,10 @@ void update() {
 				if (collision(g.enemyBullets[i].collider, g.player->collider)) {
 					g.enemyBullets[i].active = false;
 					g.player->lives--;
-					if (g.player->lives == 0) g.gameState = GO;
+					if (g.player->lives == 0) {
+						Mix_FadeOutMusic(1000);
+						g.gameState = GO; 
+					}
 				}
 			}
 		}
@@ -400,6 +414,7 @@ void update() {
 				if (g.obstacles[i].x > -128) ok = false;
 			}
 			if (ok) {
+				Mix_FadeOutMusic(1000);
 				Mix_PlayChannel(2, g.error, 0);
 				g.bsd.spawning = true;
 			}
@@ -410,61 +425,58 @@ void update() {
 void render() {
 	SDL_Rect destRect;
 
-	if (g.gameState == PLAYING || g.gameState == READY) {
-		//background render
-		if (!g.bsd.spawning && g.gameState == PLAYING) {
-			g.scroll -= 5;
-			if (g.scroll < -g.bckgWidth) g.scroll = 0;
+	if (!g.bsd.spawning && g.gameState == PLAYING) {
+		g.scroll -= 5;
+		if (g.scroll < -g.bckgWidth) g.scroll = 0;
 
-			destRect = { g.scroll, 0, g.bckgWidth, HEIGHT };
+		destRect = { g.scroll, 0, g.bckgWidth, HEIGHT };
 
-			SDL_RenderCopy(g.renderer, g.textures[BACKGROUND], nullptr, &destRect);
-			destRect.x += g.bckgWidth;
-			SDL_RenderCopy(g.renderer, g.textures[BACKGROUND], nullptr, &destRect);
+		SDL_RenderCopy(g.renderer, g.textures[BACKGROUND], nullptr, &destRect);
+		destRect.x += g.bckgWidth;
+		SDL_RenderCopy(g.renderer, g.textures[BACKGROUND], nullptr, &destRect);
+	}
+	else {
+		destRect = { g.scroll, 0, g.bckgWidth, HEIGHT };
+		SDL_RenderCopy(g.renderer, g.textures[BACKGROUND], nullptr, &destRect);
+	}
+
+	//bullet render
+	for (int i = 0; i<10; i++)
+	{
+		if (g.playerBullets[i].active) {
+			destRect = { g.playerBullets[i].x, g.playerBullets[i].y, 32, 32 };
+			SDL_RenderCopy(g.renderer, g.textures[SHEET], &g.srcPRect, &destRect);
 		}
-		else {
-			destRect = { g.scroll, 0, g.bckgWidth, HEIGHT };
-			SDL_RenderCopy(g.renderer, g.textures[BACKGROUND], nullptr, &destRect);
-		}
-
-		//bullet render
-		for (int i = 0; i<10; i++)
-		{
-			if (g.playerBullets[i].active) {
-				destRect = { g.playerBullets[i].x, g.playerBullets[i].y, 32, 32 };
-				SDL_RenderCopy(g.renderer, g.textures[SHEET], &g.srcPRect, &destRect);
-			}
-			if (g.enemyBullets[i].active) {
-				destRect = { g.enemyBullets[i].x, g.enemyBullets[i].y, 32, 32 };
-				SDL_RenderCopy(g.renderer, g.textures[SHEET], &g.srcBRect, &destRect);
-			}
-		}
-
-		for (int i = 0; i < OBSTACLES; i++) {
-			if (g.obstacles[i].active) {
-				destRect = { g.obstacles[i].x, g.obstacles[i].y, 128, 128 };
-				SDL_RenderCopy(g.renderer, g.textures[OBST], &g.obstacles[i].srcRect, &destRect);
-			}
-		}
-
-		if (g.bsd.active)
-		{
-			destRect = { WIDTH / 2, 0, WIDTH / 2, HEIGHT };
-			SDL_RenderCopy(g.renderer, g.textures[BSD], nullptr, &destRect);
-		}
-
-		//Ship animation
-		destRect = { g.player->x, g.player->y, 64, 64 };
-		SDL_RenderCopy(g.renderer, g.textures[SHEET], &g.player->spriteClips[g.player->frame / 6], &destRect);
-		g.player->frame++;
-		if (g.player->frame / 6 >= 2)
-		{
-			g.player->frame = 0;
+		if (g.enemyBullets[i].active) {
+			destRect = { g.enemyBullets[i].x, g.enemyBullets[i].y, 32, 32 };
+			SDL_RenderCopy(g.renderer, g.textures[SHEET], &g.srcBRect, &destRect);
 		}
 	}
-	else if (g.gameState == GO) {
-		destRect = { 0, 0, WIDTH, HEIGHT };
-		SDL_RenderCopy(g.renderer, g.textures[GO], nullptr, &destRect);
+
+	for (int i = 0; i < OBSTACLES; i++) {
+		if (g.obstacles[i].active) {
+			destRect = { g.obstacles[i].x, g.obstacles[i].y, 128, 128 };
+			SDL_RenderCopy(g.renderer, g.textures[OBST], &g.obstacles[i].srcRect, &destRect);
+		}
+	}
+
+	if (g.bsd.active)
+	{
+		destRect = { WIDTH / 2, 0, WIDTH / 2, HEIGHT };
+		SDL_RenderCopy(g.renderer, g.textures[BSD], nullptr, &destRect);
+	}
+
+	//Ship animation
+	destRect = { g.player->x, g.player->y, 64, 64 };
+	SDL_RenderCopy(g.renderer, g.textures[SHEET], &g.player->spriteClips[g.player->frame / 6], &destRect);
+	g.player->frame++;
+	if (g.player->frame / 6 >= 2)
+	{
+		g.player->frame = 0;
+	}
+	if (g.gameState == GO) {
+	destRect = { 0, 0, WIDTH, HEIGHT };
+	SDL_RenderCopy(g.renderer, g.textures[GO], nullptr, &destRect);
 	}
 	else if (g.gameState == VICTORY) {
 		destRect = { 0, 0, WIDTH, HEIGHT };
