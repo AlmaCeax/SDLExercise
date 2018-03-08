@@ -44,7 +44,7 @@ struct ship {
 		up = down = left = right = false;
 		spriteClips[0] = { 0, 0, 1400, 1024 };
 		spriteClips[1] = { 0, 1052, 1400, 2048 };
-		collider = { x,y,32,32 };
+		collider = { x,y,64,64};
 	}
 	bool canShoot() {
 		if (shotTimer == 0 && shooting) {
@@ -150,6 +150,7 @@ void errorTime(int c) {
 	}
 	else if (c==2) {
 		g.gameState = PLAYING;
+		Mix_ResumeMusic();
 		g.bsd.active = true;
 	}
 }
@@ -174,7 +175,7 @@ void restart() {
 			case 3: g.obstacles[i].srcRect = { 135,0,57,80 }; break;
 			case 4: g.obstacles[i].srcRect = { 190,0,75,80 }; break;
 		}
-		g.obstacles[i].collider = { x,y,57,80 };
+		g.obstacles[i].collider = { x+5,y,57,80 };
 		lastX = x;
 	}
 	g.scroll = 0;
@@ -233,7 +234,7 @@ void init() {
 			case 3: g.obstacles[i].srcRect = { 135,0,57,80 }; break;
 			case 4: g.obstacles[i].srcRect = { 190,0,75,80 }; break;
 		}
-		g.obstacles[i].collider = { x,y,57,80 };
+		g.obstacles[i].collider = { x + 25,y,57,80 };
 		lastX = x;
 	}
 }
@@ -406,7 +407,7 @@ void update() {
 				if (g.obstacles[i].x > -128) ok = false;
 			}
 			if (ok) {
-				Mix_FadeOutMusic(1000);
+				Mix_PauseMusic();
 				Mix_PlayChannel(2, g.error, 0);
 				g.bsd.spawning = true;
 			}
