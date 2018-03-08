@@ -16,13 +16,14 @@
 #define READY 0
 #define PLAYING 1
 #define ERROR 2
-#define END 3
 
 #define BACKGROUND 0
 #define SHEET 1
 #define BULLET 2
 #define BSD 3
 #define OBST 4
+#define GO 5
+#define VICTORY 6
 
 #define SHOTS 10
 #define OBSTACLES 30
@@ -82,7 +83,7 @@ struct obstacle {
 struct bsd {
 	SDL_Rect collider = { WIDTH / 2, 0, WIDTH / 2, HEIGHT };
 	int timer = 0;
-	int lives = 50;
+	int lives = 30;
 	bool active = false;
 	bool spawning = false;
 
@@ -104,7 +105,7 @@ struct globals
 	Mix_Chunk* windows = nullptr;
 	Mix_Chunk* error = nullptr;
 	SDL_Window* window = nullptr;
-	SDL_Texture* textures[5];
+	SDL_Texture* textures[7];
 	int gameState = READY;
 
 	ship* player = new ship();
@@ -179,6 +180,7 @@ void restart() {
 	g.scroll = 0;
 	g.bsd.active = false;
 	g.bsd.spawning = false;
+	g.bsd.lives = 30;
 	Mix_PlayChannel(1, g.windows, 0);
 }
 
@@ -193,6 +195,8 @@ void init() {
 	g.textures[BULLET] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("Assets/Images/bullet.png"));
 	g.textures[BSD] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("Assets/Images/bsd.png"));
 	g.textures[OBST] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("Assets/Images/Obstacles.png"));
+	g.textures[GO] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("Assets/Images/GameOver.png"));
+	g.textures[VICTORY] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("Assets/Images/Victory.png"));
 	SDL_QueryTexture(g.textures[BACKGROUND], nullptr, nullptr, &g.bckgWidth, nullptr);
 
 	Mix_Init(MIX_INIT_OGG);
@@ -261,6 +265,8 @@ void handleEvents(bool &running)
 			case SDLK_SPACE:
 				g.player->shooting = true;
 				break;
+			case SDLK_RETURN:
+				if (g.gameState == GO || g.gameState == VICTORY) restart();
 			}
 		}
 		else if (event.type == SDL_KEYUP) {
@@ -337,7 +343,7 @@ void update() {
 						if (collision(g.obstacles[i].collider, g.player->collider)) {
 							g.obstacles[i].active = false;
 							g.player->lives--;
-							if (g.player->lives == 0) restart();
+							if (g.player->lives == 0)  g.gameState = GO;
 						}
 					}
 				}
@@ -345,7 +351,7 @@ void update() {
 		}
 		else {
 			if (collision(g.bsd.collider, g.player->collider)) {
-				restart();
+				g.gameState = GO;
 			}
 		}
 		for (int i = 0; i<SHOTS; i++)
@@ -359,7 +365,7 @@ void update() {
 					if(collision(g.playerBullets[i].collider, g.bsd.collider)) {
 						g.playerBullets[i].active = false;
 						g.bsd.lives--;
-						//if (g.bsd.lives == 0) //finishgame
+						if (g.bsd.lives == 0) g.gameState = VICTORY;
 					}
 				}
 				else
@@ -384,7 +390,7 @@ void update() {
 				if (collision(g.enemyBullets[i].collider, g.player->collider)) {
 					g.enemyBullets[i].active = false;
 					g.player->lives--;
-					if (g.player->lives == 0) restart();
+					if (g.player->lives == 0) g.gameState = GO;
 				}
 			}
 		}
@@ -405,55 +411,65 @@ void update() {
 void render() {
 	SDL_Rect destRect;
 
-	//background render
-	if (g.gameState == PLAYING && !g.bsd.spawning) {
-		g.scroll -= 5;
-		if (g.scroll < -g.bckgWidth) g.scroll = 0;
+	if (g.gameState == PLAYING || g.gameState == READY) {
+		//background render
+		if (!g.bsd.spawning && g.gameState == PLAYING) {
+			g.scroll -= 5;
+			if (g.scroll < -g.bckgWidth) g.scroll = 0;
 
-		destRect = { g.scroll, 0, g.bckgWidth, HEIGHT };
+			destRect = { g.scroll, 0, g.bckgWidth, HEIGHT };
 
-		SDL_RenderCopy(g.renderer, g.textures[BACKGROUND], nullptr, &destRect);
-		destRect.x += g.bckgWidth;
-		SDL_RenderCopy(g.renderer, g.textures[BACKGROUND], nullptr, &destRect);
-	}
-	else {
-		destRect = { g.scroll, 0, g.bckgWidth, HEIGHT };
-		SDL_RenderCopy(g.renderer, g.textures[BACKGROUND], nullptr, &destRect);
-	}
-	
-	//bullet render
-	for (int i = 0; i<10; i++)
-	{
-		if (g.playerBullets[i].active) {
-			destRect = { g.playerBullets[i].x, g.playerBullets[i].y, 32, 32 };
-			SDL_RenderCopy(g.renderer, g.textures[BULLET], nullptr, &destRect);
+			SDL_RenderCopy(g.renderer, g.textures[BACKGROUND], nullptr, &destRect);
+			destRect.x += g.bckgWidth;
+			SDL_RenderCopy(g.renderer, g.textures[BACKGROUND], nullptr, &destRect);
 		}
-		if (g.enemyBullets[i].active) {
-			destRect = { g.enemyBullets[i].x, g.enemyBullets[i].y, 32, 32 };
-			SDL_RenderCopy(g.renderer, g.textures[SHEET], &g.srcRectEB, &destRect);
+		else {
+			destRect = { g.scroll, 0, g.bckgWidth, HEIGHT };
+			SDL_RenderCopy(g.renderer, g.textures[BACKGROUND], nullptr, &destRect);
+		}
+
+		//bullet render
+		for (int i = 0; i<10; i++)
+		{
+			if (g.playerBullets[i].active) {
+				destRect = { g.playerBullets[i].x, g.playerBullets[i].y, 32, 32 };
+				SDL_RenderCopy(g.renderer, g.textures[BULLET], nullptr, &destRect);
+			}
+			if (g.enemyBullets[i].active) {
+				destRect = { g.enemyBullets[i].x, g.enemyBullets[i].y, 32, 32 };
+				SDL_RenderCopy(g.renderer, g.textures[SHEET], &g.srcRectEB, &destRect);
+			}
+		}
+
+		for (int i = 0; i < OBSTACLES; i++) {
+			if (g.obstacles[i].active) {
+				destRect = { g.obstacles[i].x, g.obstacles[i].y, 128, 128 };
+				SDL_RenderCopy(g.renderer, g.textures[OBST], &g.obstacles[i].srcRect, &destRect);
+			}
+		}
+
+		if (g.bsd.active)
+		{
+			destRect = { WIDTH / 2, 0, WIDTH / 2, HEIGHT };
+			SDL_RenderCopy(g.renderer, g.textures[BSD], nullptr, &destRect);
+		}
+
+		//Ship animation
+		destRect = { g.player->x, g.player->y, 64, 64 };
+		SDL_RenderCopy(g.renderer, g.textures[SHEET], &g.player->spriteClips[g.player->frame / 6], &destRect);
+		g.player->frame++;
+		if (g.player->frame / 6 >= 2)
+		{
+			g.player->frame = 0;
 		}
 	}
-
-	for (int i = 0; i < OBSTACLES; i++) {
-		if (g.obstacles[i].active) {
-			destRect = { g.obstacles[i].x, g.obstacles[i].y, 128, 128 };
-			SDL_RenderCopy(g.renderer, g.textures[OBST], &g.obstacles[i].srcRect , &destRect);
-		}
+	else if (g.gameState == GO) {
+		destRect = { 0, 0, WIDTH, HEIGHT };
+		SDL_RenderCopy(g.renderer, g.textures[GO], nullptr, &destRect);
 	}
-
-	if (g.bsd.active)
-	{
-		destRect = { WIDTH / 2, 0, WIDTH / 2, HEIGHT};
-		SDL_RenderCopy(g.renderer, g.textures[BSD], nullptr, &destRect);
-	}
-
-	//Ship animation
-	destRect = { g.player->x, g.player->y, 64, 64 };
-	SDL_RenderCopy(g.renderer, g.textures[SHEET], &g.player->spriteClips[g.player->frame/6], &destRect);
-	g.player->frame++;
-	if (g.player->frame / 6 >= 2)
-	{
-		g.player->frame = 0;
+	else if (g.gameState == VICTORY) {
+		destRect = { 0, 0, WIDTH, HEIGHT };
+		SDL_RenderCopy(g.renderer, g.textures[VICTORY], nullptr, &destRect);
 	}
 
 	SDL_RenderPresent(g.renderer);
