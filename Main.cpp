@@ -37,7 +37,6 @@ struct ship {
 	int frame = 0;
 	SDL_Rect spriteClips[2];
 	SDL_Rect collider;
-	int lives = 3;
 
 	ship() {
 		x = 32;
@@ -45,7 +44,7 @@ struct ship {
 		up = down = left = right = false;
 		spriteClips[0] = { 0, 0, 1400, 1024 };
 		spriteClips[1] = { 0, 1052, 1400, 2048 };
-		collider = { x,y,64,64 };
+		collider = { x,y,32,32 };
 	}
 	bool canShoot() {
 		if (shotTimer == 0 && shooting) {
@@ -158,7 +157,6 @@ void restart() {
 	g.gameState = READY;
 	g.player->x = 32;
 	g.player->y = HEIGHT / 2 - 32;
-	g.player->lives = 3;
 	for (int i = 0; i < SHOTS; i++) {
 		g.playerBullets[i].active = false;
 		g.enemyBullets[i].active = false;
@@ -176,7 +174,7 @@ void restart() {
 			case 3: g.obstacles[i].srcRect = { 135,0,57,80 }; break;
 			case 4: g.obstacles[i].srcRect = { 190,0,75,80 }; break;
 		}
-		g.obstacles[i].collider = { x,y,57,80 };
+		g.obstacles[i].collider = { x,y,48,65 };
 		lastX = x;
 	}
 	g.scroll = 0;
@@ -235,7 +233,7 @@ void init() {
 			case 3: g.obstacles[i].srcRect = { 135,0,57,80 }; break;
 			case 4: g.obstacles[i].srcRect = { 190,0,75,80 }; break;
 		}
-		g.obstacles[i].collider = { x,y,57,80 };
+		g.obstacles[i].collider = { x+5,y,57,80 };
 		lastX = x;
 	}
 }
@@ -345,11 +343,8 @@ void update() {
 						if (g.obstacles[i].x < -128) g.obstacles[i].active = false;
 						if (collision(g.obstacles[i].collider, g.player->collider)) {
 							g.obstacles[i].active = false;
-							g.player->lives--;
-							if (g.player->lives == 0) { 
-								Mix_FadeOutMusic(1000);
-								g.gameState = GO; 
-							}
+							Mix_FadeOutMusic(1000);
+							g.gameState = GO; 
 						}
 					}
 				}
@@ -399,11 +394,8 @@ void update() {
 				}
 				if (collision(g.enemyBullets[i].collider, g.player->collider)) {
 					g.enemyBullets[i].active = false;
-					g.player->lives--;
-					if (g.player->lives == 0) {
-						Mix_FadeOutMusic(1000);
-						g.gameState = GO; 
-					}
+					Mix_FadeOutMusic(1000);
+					g.gameState = GO; 
 				}
 			}
 		}
