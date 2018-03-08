@@ -170,11 +170,11 @@ void restart() {
 		int text = rand() % 4 + 1;
 		switch (text) {
 			case 1: g.obstacles[i].srcRect = { 0,0,57,80 }; break;
-			case 2: g.obstacles[i].srcRect = { 70,0,60,80 }; break;
+			case 2: g.obstacles[i].srcRect = { 70,0,65,80 }; break;
 			case 3: g.obstacles[i].srcRect = { 135,0,57,80 }; break;
 			case 4: g.obstacles[i].srcRect = { 190,0,75,80 }; break;
 		}
-		g.obstacles[i].collider = { x,y,48,65 };
+		g.obstacles[i].collider = { x,y,57,80 };
 		lastX = x;
 	}
 	g.scroll = 0;
@@ -233,7 +233,7 @@ void init() {
 			case 3: g.obstacles[i].srcRect = { 135,0,57,80 }; break;
 			case 4: g.obstacles[i].srcRect = { 190,0,75,80 }; break;
 		}
-		g.obstacles[i].collider = { x+5,y,57,80 };
+		g.obstacles[i].collider = { x,y,57,80 };
 		lastX = x;
 	}
 }
