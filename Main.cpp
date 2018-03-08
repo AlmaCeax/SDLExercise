@@ -19,11 +19,10 @@
 
 #define BACKGROUND 0
 #define SHEET 1
-#define BULLET 2
-#define BSD 3
-#define OBST 4
-#define GO 5
-#define VICTORY 6
+#define BSD 2
+#define OBST 3
+#define GO 4
+#define VICTORY 5
 
 #define SHOTS 10
 #define OBSTACLES 30
@@ -105,7 +104,7 @@ struct globals
 	Mix_Chunk* windows = nullptr;
 	Mix_Chunk* error = nullptr;
 	SDL_Window* window = nullptr;
-	SDL_Texture* textures[7];
+	SDL_Texture* textures[6];
 	int gameState = READY;
 
 	ship* player = new ship();
@@ -113,7 +112,8 @@ struct globals
 	bullet playerBullets[SHOTS];
 	bullet enemyBullets[SHOTS];
 	obstacle obstacles[OBSTACLES];
-	SDL_Rect srcRectEB = { 1350, 1052, 1024, 1024 };
+	SDL_Rect srcBRect = { 1350, 1052, 1024, 1024 };
+	SDL_Rect srcPRect = { 1350, 0, 1024, 1024 };
 
 	int scroll = 0;
 	int bckgWidth = 0;
@@ -192,7 +192,6 @@ void init() {
 	IMG_Init(IMG_INIT_PNG);
 	g.textures[BACKGROUND] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("Assets/Images/Backgrobggund.png"));
 	g.textures[SHEET] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("Assets/Images/WinTack.png"));
-	g.textures[BULLET] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("Assets/Images/bullet.png"));
 	g.textures[BSD] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("Assets/Images/bsd.png"));
 	g.textures[OBST] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("Assets/Images/Obstacles.png"));
 	g.textures[GO] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("Assets/Images/GameOver.png"));
@@ -433,11 +432,11 @@ void render() {
 		{
 			if (g.playerBullets[i].active) {
 				destRect = { g.playerBullets[i].x, g.playerBullets[i].y, 32, 32 };
-				SDL_RenderCopy(g.renderer, g.textures[BULLET], nullptr, &destRect);
+				SDL_RenderCopy(g.renderer, g.textures[SHEET], &g.srcPRect, &destRect);
 			}
 			if (g.enemyBullets[i].active) {
 				destRect = { g.enemyBullets[i].x, g.enemyBullets[i].y, 32, 32 };
-				SDL_RenderCopy(g.renderer, g.textures[SHEET], &g.srcRectEB, &destRect);
+				SDL_RenderCopy(g.renderer, g.textures[SHEET], &g.srcBRect, &destRect);
 			}
 		}
 
