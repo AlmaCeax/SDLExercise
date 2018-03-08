@@ -43,8 +43,8 @@ struct ship {
 		x = 32;
 		y = HEIGHT / 2 -32;
 		up = down = left = right = false;
-		spriteClips[0] = { 0, 0, 1024, 1024 };
-		spriteClips[1] = { 0, 1052, 1024, 2048 };
+		spriteClips[0] = { 0, 0, 1400, 1024 };
+		spriteClips[1] = { 0, 1052, 1400, 2048 };
 		collider = { x,y,64,64 };
 	}
 	bool canShoot() {
@@ -172,7 +172,7 @@ void restart() {
 		int text = rand() % 4 + 1;
 		switch (text) {
 			case 1: g.obstacles[i].srcRect = { 0,0,57,80 }; break;
-			case 2: g.obstacles[i].srcRect = { 70,0,57,80 }; break;
+			case 2: g.obstacles[i].srcRect = { 70,0,60,80 }; break;
 			case 3: g.obstacles[i].srcRect = { 135,0,57,80 }; break;
 			case 4: g.obstacles[i].srcRect = { 190,0,75,80 }; break;
 		}
@@ -303,7 +303,7 @@ void update() {
 		if (g.player->right) g.player->x += g.player->speed;
 
 		if (g.player->y < 0)g.player->y = 0;
-		if (g.player->y > HEIGHT-64)g.player->y = HEIGHT-64;
+		if (g.player->y > HEIGHT-64) g.player->y = HEIGHT-64;
 		if (g.player->x < 0)g.player->x = 0;
 		if (g.player->x > WIDTH-64) g.player->x = WIDTH-64;
 
