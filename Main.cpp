@@ -56,6 +56,8 @@ struct ship {
 		return false;
 	}
 };
+
+
 struct bullet {
 	int x, y;
 	bool active, shot;
@@ -77,6 +79,23 @@ struct obstacle {
 	SDL_Rect collider, srcRect;
 };
 
+struct bsd {
+	SDL_Rect collider = { WIDTH / 2, 0, WIDTH / 2, HEIGHT };
+	int timer = 0;
+	int lives = 50;
+	bool active = false;
+	bool spawning = false;
+
+	bool shoot() {
+		if (timer == 0) {
+			timer = 50;
+			return true;
+		}
+		timer--;
+		return false;
+	}
+};
+
 struct globals 
 {
 	SDL_Renderer* renderer = nullptr;
@@ -89,33 +108,17 @@ struct globals
 	int gameState = READY;
 
 	ship* player = new ship();
+	bsd bsd;
 	bullet playerBullets[SHOTS];
 	bullet enemyBullets[SHOTS];
 	obstacle obstacles[OBSTACLES];
 	SDL_Rect srcRectEB = { 1350, 1052, 1024, 1024 };
-	SDL_Rect bsdCollider = { WIDTH / 2, HEIGHT / 4, WIDTH / 2, HEIGHT / 2 };
-	int bsdTimer = 0;
+
 	int scroll = 0;
 	int bckgWidth = 0;
 
 	int playerShot = 0;
 	int enemyShot = 10;
-
-	bool bsdShoot() {
-		if (gameState == ERROR) {
-			if (bsdTimer == 0) {
-				if (player->y > HEIGHT / 4 && player->y < HEIGHT / 4 + HEIGHT / 2 - 32)
-				{
-					bsdTimer = 50;
-					return true;
-				}
-				return false;
-			}
-			bsdTimer--;
-			return false;
-		}
-		return false;
-	}
 } g;
 
 
@@ -143,9 +146,10 @@ void errorTime(int c) {
 	if (c == 1) {
 		g.gameState = PLAYING;
 	}
-	/*else if (c==2) {
+	else if (c==2) {
 		g.gameState = PLAYING;
-	}*/
+		g.bsd.active = true;
+	}
 }
 void restart() {
 	g.gameState = READY;
@@ -164,15 +168,17 @@ void restart() {
 		g.obstacles[i].y = y;
 		int text = rand() % 4 + 1;
 		switch (text) {
-		case 1: g.obstacles[i].srcRect = { 0,0,57,80 }; break;
-		case 2: g.obstacles[i].srcRect = { 70,0,57,80 }; break;
-		case 3: g.obstacles[i].srcRect = { 135,0,57,80 }; break;
-		case 4: g.obstacles[i].srcRect = { 190,0,75,80 }; break;
+			case 1: g.obstacles[i].srcRect = { 0,0,57,80 }; break;
+			case 2: g.obstacles[i].srcRect = { 70,0,57,80 }; break;
+			case 3: g.obstacles[i].srcRect = { 135,0,57,80 }; break;
+			case 4: g.obstacles[i].srcRect = { 190,0,75,80 }; break;
 		}
 		g.obstacles[i].collider = { x,y,57,80 };
 		lastX = x;
 	}
 	g.scroll = 0;
+	g.bsd.active = false;
+	g.bsd.spawning = false;
 	Mix_PlayChannel(1, g.windows, 0);
 }
 
@@ -306,34 +312,42 @@ void update() {
 			g.playerShot++;
 		}
 
-		if (g.bsdShoot()) {
-			Mix_PlayChannel(4, g.blaster, 0);
-			if (g.enemyShot == SHOTS) g.enemyShot = 0;
-			g.enemyBullets[g.enemyShot].active = true;
-			g.enemyBullets[g.enemyShot].x = WIDTH / 2;
-			g.enemyBullets[g.enemyShot].y = g.player->y;
-			g.enemyBullets[g.enemyShot].collider.x = WIDTH / 2;
-			g.enemyBullets[g.enemyShot].collider.y = g.player->y;
-			g.enemyShot++;
+		if (g.bsd.active) {
+			if (g.bsd.shoot()) {
+				Mix_PlayChannel(4, g.blaster, 0);
+				if (g.enemyShot == SHOTS) g.enemyShot = 0;
+				g.enemyBullets[g.enemyShot].active = true;
+				g.enemyBullets[g.enemyShot].x = WIDTH / 2;
+				g.enemyBullets[g.enemyShot].y = g.player->y;
+				g.enemyBullets[g.enemyShot].collider.x = WIDTH / 2;
+				g.enemyBullets[g.enemyShot].collider.y = g.player->y;
+				g.enemyShot++;
+			}
 		}
 
-		for (int i = 0; i < OBSTACLES; i++) {
-			if (g.obstacles[i].x > -128) {
-				g.obstacles[i].x -= 5;
-				g.obstacles[i].collider.x -= 5;
+		if (!g.bsd.active) {
+			for (int i = 0; i < OBSTACLES; i++) {
+				if (g.obstacles[i].x > -128) {
+					g.obstacles[i].x -= 5;
+					g.obstacles[i].collider.x -= 5;
 
-				if (g.obstacles[i].x >= (WIDTH+128)) g.obstacles[i].active = true;
-				if (g.obstacles[i].active) {
-					if (g.obstacles[i].x < 0) g.obstacles[i].active = false;
-					if (collision(g.obstacles[i].collider, g.player->collider)) {
-						g.obstacles[i].active = false;
-						g.player->lives--;
-						if (g.player->lives == 0) restart();
+					if (g.obstacles[i].x >= (WIDTH + 128)) g.obstacles[i].active = true;
+					if (g.obstacles[i].active) {
+						if (g.obstacles[i].x < -128) g.obstacles[i].active = false;
+						if (collision(g.obstacles[i].collider, g.player->collider)) {
+							g.obstacles[i].active = false;
+							g.player->lives--;
+							if (g.player->lives == 0) restart();
+						}
 					}
 				}
 			}
 		}
-
+		else {
+			if (collision(g.bsd.collider, g.player->collider)) {
+				restart();
+			}
+		}
 		for (int i = 0; i<SHOTS; i++)
 		{
 			if (g.playerBullets[i].active) {
@@ -341,14 +355,22 @@ void update() {
 				g.playerBullets[i].collider.x = g.playerBullets[i].x;
 				if (g.playerBullets[i].x > WIDTH) g.playerBullets[i].active = false;
 
-				/*if (collision(g.playerBullets[i].collider, g.bsdCollider)) {
-					g.playerBullets[i].active = false;
-				}*/
-				for (int ii = 0; ii < OBSTACLES; ii++) {
-					if (g.obstacles[ii].active) {
-						if (collision(g.obstacles[ii].collider, g.playerBullets[i].collider)) {
-							g.obstacles[ii].active = false;
-							g.playerBullets[i].active = false;
+				if (g.bsd.active) {
+					if(collision(g.playerBullets[i].collider, g.bsd.collider)) {
+						g.playerBullets[i].active = false;
+						g.bsd.lives--;
+						//if (g.bsd.lives == 0) //finishgame
+					}
+				}
+				else
+				{
+					for (int ii = 0; ii < OBSTACLES; ii++) {
+						if (g.obstacles[ii].active) {
+							if (collision(g.obstacles[ii].collider, g.playerBullets[i].collider)) {
+								g.obstacles[ii].active = false;
+								g.obstacles[ii].x = -128;
+								g.playerBullets[i].active = false;
+							}
 						}
 					}
 				}
@@ -366,6 +388,17 @@ void update() {
 				}
 			}
 		}
+
+		if (!g.bsd.spawning) {
+			bool ok = true;
+			for (int i = (OBSTACLES - 5); i < OBSTACLES; i++) {
+				if (g.obstacles[i].x > -128) ok = false;
+			}
+			if (ok) {
+				Mix_PlayChannel(2, g.error, 0);
+				g.bsd.spawning = true;
+			}
+		}	
 	}
 }
 
@@ -373,7 +406,7 @@ void render() {
 	SDL_Rect destRect;
 
 	//background render
-	if (g.gameState == PLAYING) {
+	if (g.gameState == PLAYING && !g.bsd.spawning) {
 		g.scroll -= 5;
 		if (g.scroll < -g.bckgWidth) g.scroll = 0;
 
@@ -384,7 +417,7 @@ void render() {
 		SDL_RenderCopy(g.renderer, g.textures[BACKGROUND], nullptr, &destRect);
 	}
 	else {
-		destRect = { 0, 0, g.bckgWidth, HEIGHT };
+		destRect = { g.scroll, 0, g.bckgWidth, HEIGHT };
 		SDL_RenderCopy(g.renderer, g.textures[BACKGROUND], nullptr, &destRect);
 	}
 	
@@ -408,9 +441,9 @@ void render() {
 		}
 	}
 
-	if (g.gameState == ERROR)
+	if (g.bsd.active)
 	{
-		destRect = { WIDTH / 2, HEIGHT / 4, WIDTH / 2, HEIGHT / 2 };
+		destRect = { WIDTH / 2, 0, WIDTH / 2, HEIGHT};
 		SDL_RenderCopy(g.renderer, g.textures[BSD], nullptr, &destRect);
 	}
 
