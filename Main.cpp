@@ -1,6 +1,8 @@
 #include "SDL\include\SDL.h"
 #include "SDL_Image\include\SDL_image.h"
 #include "SDL_Mixer\include\SDL_mixer.h"
+#include <cstdlib>
+#include <time.h> 
 
 #pragma comment( lib, "SDL/libx86/SDL2.lib" )
 #pragma comment( lib, "SDL/libx86/SDL2main.lib" )
@@ -11,31 +13,28 @@
 #define WIDTH 1280
 #define HEIGHT 720
 
-#define UP 0
-#define DOWN 1
-#define LEFT 2
-#define RIGHT 3
-
-#define START 0
-#define ERROR 1
-#define PLAY 2
-#define END 2
+#define READY 0
+#define PLAYING 1
+#define ERROR 2
+#define END 3
 
 #define BACKGROUND 0
 #define SHEET 1
 #define BULLET 2
 #define BSD 3
+#define OBST 4
 
 #define SHOTS 10
+#define OBSTACLES 30
 
 
 struct ship {
 	int x, y;
-	bool directions[4];
-	bool shooting;
-	int speed;
-	int shotTimer;
-	int frame;
+	bool up, down, left, right;
+	bool shooting = false;
+	int speed = 5;
+	int shotTimer = 0;
+	int frame = 0;
 	SDL_Rect spriteClips[2];
 	SDL_Rect collider;
 	int lives = 3;
@@ -43,13 +42,7 @@ struct ship {
 	ship() {
 		x = 32;
 		y = HEIGHT / 2 -32;
-		speed = 5;
-		frame = 0;
-		shotTimer = 0;
-		shooting = false;
-		for (bool &d : directions) {
-			d = false;
-		}
+		up = down = left = right = false;
 		spriteClips[0] = { 0, 0, 1024, 1024 };
 		spriteClips[1] = { 0, 1052, 1024, 2048 };
 		collider = { x,y,64,64 };
@@ -78,6 +71,11 @@ struct bullet {
 	}
 	bullet() {}
 };
+struct obstacle {
+	int x, y;
+	bool active = true;
+	SDL_Rect collider, srcRect;
+};
 
 struct globals 
 {
@@ -87,29 +85,35 @@ struct globals
 	Mix_Chunk* windows = nullptr;
 	Mix_Chunk* error = nullptr;
 	SDL_Window* window = nullptr;
-	SDL_Texture* textures[4];
-	int gameState = START;
+	SDL_Texture* textures[5];
+	int gameState = READY;
 
 	ship* player = new ship();
 	bullet playerBullets[SHOTS];
 	bullet enemyBullets[SHOTS];
+	obstacle obstacles[OBSTACLES];
 	SDL_Rect srcRectEB = { 1350, 1052, 1024, 1024 };
 	SDL_Rect bsdCollider = { WIDTH / 2, HEIGHT / 4, WIDTH / 2, HEIGHT / 2 };
 	int bsdTimer = 0;
+	int scroll = 0;
+	int bckgWidth = 0;
 
 	int playerShot = 0;
 	int enemyShot = 10;
 
 	bool bsdShoot() {
-		if (bsdTimer == 0) {
-			if (player->y > HEIGHT / 4 && player->y < HEIGHT / 4 + HEIGHT / 2 - 32)
-			{
-				bsdTimer = 50;
-				return true;
+		if (gameState == ERROR) {
+			if (bsdTimer == 0) {
+				if (player->y > HEIGHT / 4 && player->y < HEIGHT / 4 + HEIGHT / 2 - 32)
+				{
+					bsdTimer = 50;
+					return true;
+				}
+				return false;
 			}
+			bsdTimer--;
 			return false;
 		}
-		bsdTimer--;
 		return false;
 	}
 } g;
@@ -137,15 +141,14 @@ void close() {
 
 void errorTime(int c) {
 	if (c == 1) {
-		Mix_PlayChannel(2, g.error, 0);
-		g.gameState = ERROR;
+		g.gameState = PLAYING;
 	}
-	else if (c==2) {
-		g.gameState = PLAY;
-	}
+	/*else if (c==2) {
+		g.gameState = PLAYING;
+	}*/
 }
 void restart() {
-	g.gameState = START;
+	g.gameState = READY;
 	g.player->x = 32;
 	g.player->y = HEIGHT / 2 - 32;
 	g.player->lives = 3;
@@ -153,6 +156,23 @@ void restart() {
 		g.playerBullets[i].active = false;
 		g.enemyBullets[i].active = false;
 	}
+	int lastX = WIDTH;
+	for (int i = 0; i < OBSTACLES; i++) {
+		int x = lastX + 250;
+		int y = rand() % (HEIGHT - 128);
+		g.obstacles[i].x = x;
+		g.obstacles[i].y = y;
+		int text = rand() % 4 + 1;
+		switch (text) {
+		case 1: g.obstacles[i].srcRect = { 0,0,57,80 }; break;
+		case 2: g.obstacles[i].srcRect = { 70,0,57,80 }; break;
+		case 3: g.obstacles[i].srcRect = { 135,0,57,80 }; break;
+		case 4: g.obstacles[i].srcRect = { 190,0,75,80 }; break;
+		}
+		g.obstacles[i].collider = { x,y,57,80 };
+		lastX = x;
+	}
+	g.scroll = 0;
 	Mix_PlayChannel(1, g.windows, 0);
 }
 
@@ -162,10 +182,12 @@ void init() {
 	g.renderer = SDL_CreateRenderer(g.window, -1, 0);
 
 	IMG_Init(IMG_INIT_PNG);
-	g.textures[BACKGROUND] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("Assets/Images/background.png"));
+	g.textures[BACKGROUND] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("Assets/Images/Backgrobggund.png"));
 	g.textures[SHEET] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("Assets/Images/WinTack.png"));
 	g.textures[BULLET] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("Assets/Images/bullet.png"));
 	g.textures[BSD] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("Assets/Images/bsd.png"));
+	g.textures[OBST] = SDL_CreateTextureFromSurface(g.renderer, IMG_Load("Assets/Images/Obstacles.png"));
+	SDL_QueryTexture(g.textures[BACKGROUND], nullptr, nullptr, &g.bckgWidth, nullptr);
 
 	Mix_Init(MIX_INIT_OGG);
 	Mix_OpenAudio(MIX_DEFAULT_FREQUENCY, AUDIO_U8, 2, 1024);
@@ -184,6 +206,25 @@ void init() {
 		g.playerBullets[i] = bullet(25);
 		g.enemyBullets[i] = bullet(10);
 	}
+
+	srand(time(NULL));
+
+	int lastX = WIDTH;
+	for (int i = 0; i < OBSTACLES; i++) {
+		int x = lastX + 250;
+		int y = rand() % (HEIGHT - 128);
+		g.obstacles[i].x = x;
+		g.obstacles[i].y = y;
+		int text = rand() % 4 +1;
+		switch (text) {
+			case 1: g.obstacles[i].srcRect = { 0,0,57,80 }; break;
+			case 2: g.obstacles[i].srcRect = { 70,0,57,80 }; break;
+			case 3: g.obstacles[i].srcRect = { 135,0,57,80 }; break;
+			case 4: g.obstacles[i].srcRect = { 190,0,75,80 }; break;
+		}
+		g.obstacles[i].collider = { x,y,57,80 };
+		lastX = x;
+	}
 }
 
 void handleEvents(bool &running)
@@ -200,16 +241,16 @@ void handleEvents(bool &running)
 				running = false;
 				break;
 			case SDLK_UP:
-				g.player->directions[UP] = true;
+				g.player->up = true;
 				break;
 			case SDLK_DOWN:
-				g.player->directions[DOWN] = true;
+				g.player->down = true;
 				break;
 			case SDLK_LEFT:
-				g.player->directions[LEFT] = true;
+				g.player->left = true;
 				break;
 			case SDLK_RIGHT:
-				g.player->directions[RIGHT] = true;
+				g.player->right = true;
 				break;
 			case SDLK_SPACE:
 				g.player->shooting = true;
@@ -219,16 +260,16 @@ void handleEvents(bool &running)
 		else if (event.type == SDL_KEYUP) {
 			switch (event.key.keysym.sym) {
 			case SDLK_UP:
-				g.player->directions[UP] = false;
+				g.player->up = false;
 				break;
 			case SDLK_DOWN:
-				g.player->directions[DOWN] = false;
+				g.player->down = false;
 				break;
 			case SDLK_LEFT:
-				g.player->directions[LEFT] = false;
+				g.player->left = false;
 				break;
 			case SDLK_RIGHT:
-				g.player->directions[RIGHT] = false;
+				g.player->right = false;
 				break;
 			case SDLK_SPACE:
 				g.player->shooting = false;
@@ -240,11 +281,16 @@ void handleEvents(bool &running)
 
 void update() {
 
-	if (g.gameState == PLAY) {
-		if (g.player->directions[UP]) g.player->y -= g.player->speed;
-		if (g.player->directions[DOWN]) g.player->y += g.player->speed;
-		if (g.player->directions[LEFT]) g.player->x -= g.player->speed;
-		if (g.player->directions[RIGHT]) g.player->x += g.player->speed;
+	if (g.gameState == PLAYING) {
+		if (g.player->up) g.player->y -= g.player->speed;
+		if (g.player->down) g.player->y += g.player->speed;
+		if (g.player->left) g.player->x -= g.player->speed;
+		if (g.player->right) g.player->x += g.player->speed;
+
+		if (g.player->y < 0)g.player->y = 0;
+		if (g.player->y > HEIGHT-64)g.player->y = HEIGHT-64;
+		if (g.player->x < 0)g.player->x = 0;
+		if (g.player->x > WIDTH-64) g.player->x = WIDTH-64;
 
 		g.player->collider.x = g.player->x;
 		g.player->collider.y = g.player->y;
@@ -271,6 +317,23 @@ void update() {
 			g.enemyShot++;
 		}
 
+		for (int i = 0; i < OBSTACLES; i++) {
+			if (g.obstacles[i].x > -128) {
+				g.obstacles[i].x -= 5;
+				g.obstacles[i].collider.x -= 5;
+
+				if (g.obstacles[i].x >= (WIDTH+128)) g.obstacles[i].active = true;
+				if (g.obstacles[i].active) {
+					if (g.obstacles[i].x < 0) g.obstacles[i].active = false;
+					if (collision(g.obstacles[i].collider, g.player->collider)) {
+						g.obstacles[i].active = false;
+						g.player->lives--;
+						if (g.player->lives == 0) restart();
+					}
+				}
+			}
+		}
+
 		for (int i = 0; i<SHOTS; i++)
 		{
 			if (g.playerBullets[i].active) {
@@ -278,8 +341,16 @@ void update() {
 				g.playerBullets[i].collider.x = g.playerBullets[i].x;
 				if (g.playerBullets[i].x > WIDTH) g.playerBullets[i].active = false;
 
-				if (collision(g.playerBullets[i].collider, g.bsdCollider)) {
+				/*if (collision(g.playerBullets[i].collider, g.bsdCollider)) {
 					g.playerBullets[i].active = false;
+				}*/
+				for (int ii = 0; ii < OBSTACLES; ii++) {
+					if (g.obstacles[ii].active) {
+						if (collision(g.obstacles[ii].collider, g.playerBullets[i].collider)) {
+							g.obstacles[ii].active = false;
+							g.playerBullets[i].active = false;
+						}
+					}
 				}
 			}
 			if (g.enemyBullets[i].active) {
@@ -302,9 +373,21 @@ void render() {
 	SDL_Rect destRect;
 
 	//background render
-	destRect = {0, 0, WIDTH, HEIGHT};
-	SDL_RenderCopy(g.renderer, g.textures[BACKGROUND], nullptr, &destRect);
+	if (g.gameState == PLAYING) {
+		g.scroll -= 5;
+		if (g.scroll < -g.bckgWidth) g.scroll = 0;
 
+		destRect = { g.scroll, 0, g.bckgWidth, HEIGHT };
+
+		SDL_RenderCopy(g.renderer, g.textures[BACKGROUND], nullptr, &destRect);
+		destRect.x += g.bckgWidth;
+		SDL_RenderCopy(g.renderer, g.textures[BACKGROUND], nullptr, &destRect);
+	}
+	else {
+		destRect = { 0, 0, g.bckgWidth, HEIGHT };
+		SDL_RenderCopy(g.renderer, g.textures[BACKGROUND], nullptr, &destRect);
+	}
+	
 	//bullet render
 	for (int i = 0; i<10; i++)
 	{
@@ -318,7 +401,14 @@ void render() {
 		}
 	}
 
-	if (g.gameState != START)
+	for (int i = 0; i < OBSTACLES; i++) {
+		if (g.obstacles[i].active) {
+			destRect = { g.obstacles[i].x, g.obstacles[i].y, 128, 128 };
+			SDL_RenderCopy(g.renderer, g.textures[OBST], &g.obstacles[i].srcRect , &destRect);
+		}
+	}
+
+	if (g.gameState == ERROR)
 	{
 		destRect = { WIDTH / 2, HEIGHT / 4, WIDTH / 2, HEIGHT / 2 };
 		SDL_RenderCopy(g.renderer, g.textures[BSD], nullptr, &destRect);
